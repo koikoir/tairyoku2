@@ -555,7 +555,7 @@
       }
     }
 
-    /* システム印刷メディアクエリ設計 */
+    /* システム印刷メディアクエリ設計：1ページに完全に収め、画像の通りにレイアウトする */
     @media print {
       body {
         background: #fff !important;
@@ -574,15 +574,24 @@
       }
       .report {
         padding: 0 !important;
-        max-width: 190mm !important; /* A4実効領域幅へのジャストフィット */
+        max-width: 190mm !important; /* A4余白10mm時の実効最大幅 */
         width: 100% !important;
         box-shadow: none !important;
         overflow: visible !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .report-head {
+        margin-bottom: 12px !important; /* 上部ヘッダーの縦スペースを圧縮 */
+        padding-bottom: 8px !important;
+      }
+      .report-title {
+        font-size: 25px !important; /* 少しコンパクトにし、1行の高さを削減 */
       }
       .report-flex {
         display: grid !important;
-        grid-template-columns: 42% 58% !important; /* レーダー幅と比較テーブルの絶妙な比率調整 */
-        gap: 20px !important;
+        grid-template-columns: 43% 57% !important; /* レーダーと詳細表のベストな比率 */
+        gap: 24px !important;
         overflow: visible !important;
       }
       .chart-card {
@@ -592,19 +601,49 @@
         border: none !important;
         box-shadow: none !important;
       }
+      .chart-card h3 {
+        margin-bottom: 8px !important;
+        font-size: 15px !important;
+      }
       .legend {
-        margin-top: 12px !important;
+        margin-top: 6px !important;
         font-size: 11px !important;
+      }
+      .note {
+        margin-top: 8px !important;
+        padding: 6px !important;
+        font-size: 10px !important;
+        line-height: 1.3 !important;
+      }
+      .report-section-title {
+        padding: 4px 10px !important;
+        font-size: 13px !important;
+      }
+      .report-list {
+        padding-top: 4px !important;
+      }
+      .report-row {
+        padding: 3.5px 0 !important; /* 行パディングを小さくして全体の高さを圧縮 */
+        font-size: 13px !important;
+      }
+      .report-row span {
+        font-size: 22px !important; /* 数値表示を少し引き締め、1行にジャストフィット */
       }
       .no-print {
         display: none !important;
       }
       .advice {
-        margin-top: 20px !important;
+        margin-top: 12px !important; /* 下部アドバイス欄と上部グリッドの間隔を最適化 */
         border: 1px solid #bfdbfe !important;
         background: #eff6ff !important;
         padding: 12px !important;
+        border-radius: 12px !important;
         page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .advice h3 {
+        margin: 0 0 6px 0 !important;
+        font-size: 14px !important;
       }
       .print-advice {
         display: block !important;
@@ -613,8 +652,8 @@
         border: none !important;
         padding: 0 !important;
         background: transparent !important;
-        line-height: 1.6 !important;
-        font-size: 13px !important;
+        line-height: 1.5 !important;
+        font-size: 12px !important;
         font-weight: 600 !important;
         color: var(--slate-800) !important;
         min-height: auto !important;
@@ -622,7 +661,7 @@
       }
       @page {
         size: A4 portrait;
-        margin: 10mm; /* A4標準印刷マージン */
+        margin: 10mm; /* A4標準マージン */
       }
     }
   </style>
@@ -791,7 +830,7 @@
       if (im.length) {
         c += `前回と比較して「${im.slice(0, 3).join('・')}」の測定結果に良好な改善が見られます。これまでの機能維持に向けた取り組みが、数値となってしっかりと成果に現れています。`;
         if (mob.length) c += ' 特に歩行能や移動時の動作が非常に安定してきており、転倒予防の観点からも素晴らしい経過です。';
-        c += ' この調子で無理のない範囲で今のトレーニングを継続していきましょう。'
+        c += ' この調子で無理のない範囲で今のトレーニングを継続していましょう。'
       } else if (stable >= 3) {
         c += '全体的に前回と変わらず、非常に安定した状態を維持できております。日常生活レベルを自立して保つためには、この「現状維持」が何よりも価値ある成果です。引き続きご自身のペースを大切に続けてまいりましょう。';
       } else {
@@ -801,9 +840,9 @@
     }
 
     function radar(cur, prev, isPrint = false) {
-      // 印刷可能領域にジャストフィットさせるため、印刷用チャートは横幅を370pxにダウンサイズし、
-      // はみ出しや要素配置のズレを完全に防ぎます。
-      const size = isPrint ? 370 : 320, center = size / 2, radius = isPrint ? 100 : 110, step = Math.PI * 2 / keys.length;
+      // 1ページに美しく収めるため、印刷用チャートサイズを横幅「310px」、内円半径「85px」に再スリム化。
+      // これにより、右側の測定項目詳細（8行分）の縦寸法と完全に一致し、印刷面でのズレを完全に防ぎます。
+      const size = isPrint ? 310 : 320, center = size / 2, radius = isPrint ? 85 : 110, step = Math.PI * 2 / keys.length;
       const coord = (val, i) => {
         const a = i * step - Math.PI / 2, r = val / 100 * radius;
         return [center + r * Math.cos(a), center + r * Math.sin(a)]
@@ -817,19 +856,17 @@
         return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#cbd5e1"/>`
       }).join('');
       
-      // レーダーチャートラベルテキスト。印刷時にベクター描画の誤差でフォント位置がズレないよう、
-      // 印刷用CSSプロパティ(text-rendering: geometricPrecision)を付与したスタイルで安定化させます。
       const labels = keys.map((k, i) => {
-        const a = i * step - Math.PI / 2, lr = radius + (isPrint ? 40 : 35);
-        return `<text x="${center + lr * Math.cos(a)}" y="${center + lr * Math.sin(a)}" text-anchor="middle" dominant-baseline="central" font-size="${isPrint ? 12 : 10}" font-weight="${isPrint ? '700' : '600'}" fill="${isPrint ? '#000' : '#64748b'}" style="${isPrint ? 'text-rendering: geometricPrecision;' : ''}">${isPrint ? METRICS[k].printLabel : METRICS[k].label}</text>`
+        const a = i * step - Math.PI / 2, lr = radius + (isPrint ? 35 : 35);
+        return `<text x="${center + lr * Math.cos(a)}" y="${center + lr * Math.sin(a)}" text-anchor="middle" dominant-baseline="central" font-size="${isPrint ? 11 : 10}" font-weight="${isPrint ? '700' : '600'}" fill="${isPrint ? '#000' : '#64748b'}" style="${isPrint ? 'text-rendering: geometricPrecision;' : ''}">${isPrint ? METRICS[k].printLabel : METRICS[k].label}</text>`
       }).join('');
       
       const path = (rec) => rec ? keys.map((k, i) => coord(normalize(k, rec[k]), i).join(',')).join(' ') : '';
       const prevPoly = prev ? `<polygon points="${path(prev)}" fill="rgba(148,163,184,.2)" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 2"/>` : '';
-      const curPoly = cur ? `<polygon points="${path(cur)}" fill="rgba(37,99,235,.3)" stroke="#2563eb" stroke-width="${isPrint ? 4 : 2}"/>` : '';
+      const curPoly = cur ? `<polygon points="${path(cur)}" fill="rgba(37,99,235,.3)" stroke="#2563eb" stroke-width="${isPrint ? 3.5 : 2}"/>` : '';
       const dots = isPrint && cur ? keys.map((k, i) => {
         const [x, y] = coord(normalize(k, cur[k]), i);
-        return `<circle cx="${x}" cy="${y}" r="5" fill="#2563eb" stroke="white" stroke-width="2"/>`
+        return `<circle cx="${x}" cy="${y}" r="4" fill="#2563eb" stroke="white" stroke-width="1.5"/>`
       }).join('') : '';
       
       return `
@@ -976,8 +1013,6 @@
       };
       window.addEventListener('afterprint', restoreAfterPrint);
 
-      // システム印刷ダイアログの起動タイミングを調整。
-      // レンダリングエンジンの再計算、およびSVG内のフォントベクター配置確定後に完全に合致させます。
       setTimeout(() => {
         try {
           window.focus();
