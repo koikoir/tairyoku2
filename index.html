@@ -496,7 +496,48 @@
     .hidden {
       display: none !important;
     }
-    @media (max-width: 900px) {
+    
+    /* アプリ内トースト通知(メッセージボックス)用スタイル */
+    .toast-container {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 90%;
+      max-width: 450px;
+    }
+    .toast {
+      background: var(--slate-900);
+      color: #fff;
+      padding: 14px 20px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: auto;
+      animation: toast-fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .toast.toast-error {
+      background: var(--red);
+    }
+    .toast.toast-success {
+      background: var(--green);
+    }
+    @keyframes toast-fade-in {
+      from { opacity: 0; transform: translateY(-16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* レスポンシブ設計：画面表示時のみに限定化する(印刷時のカラム崩れを完全に防ぐ) */
+    @media screen and (max-width: 900px) {
       .grid, .main-grid, .report-flex {
         grid-template-columns: 1fr;
       }
@@ -513,13 +554,15 @@
         font-size: 22px;
       }
     }
+
+    /* システム印刷メディアクエリ設計 */
     @media print {
       body {
-        background: #fff;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
+        background: #fff !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
-      .container, .preview-tools {
+      .container, .preview-tools, .toast-container {
         display: none !important;
       }
       .preview {
@@ -527,33 +570,59 @@
         display: block !important;
         padding: 0 !important;
         overflow: visible !important;
+        background: #fff !important;
       }
       .report {
-        padding: 0;
-        max-width: 190mm;
-        width: 100%;
-        box-shadow: none;
+        padding: 0 !important;
+        max-width: 190mm !important; /* A4実効領域幅へのジャストフィット */
+        width: 100% !important;
+        box-shadow: none !important;
         overflow: visible !important;
+      }
+      .report-flex {
+        display: grid !important;
+        grid-template-columns: 42% 58% !important; /* レーダー幅と比較テーブルの絶妙な比率調整 */
+        gap: 20px !important;
+        overflow: visible !important;
+      }
+      .chart-card {
+        padding: 0 !important;
+        margin: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+      .legend {
+        margin-top: 12px !important;
+        font-size: 11px !important;
       }
       .no-print {
         display: none !important;
       }
+      .advice {
+        margin-top: 20px !important;
+        border: 1px solid #bfdbfe !important;
+        background: #eff6ff !important;
+        padding: 12px !important;
+        page-break-inside: avoid !important;
+      }
       .print-advice {
         display: block !important;
-        white-space: pre-wrap;
-        word-break: break-all;
-        border: 1px solid #bfdbfe;
-        border-radius: 12px;
-        padding: 12px;
-        background: #fff;
-        line-height: 1.7;
-        font-weight: 600;
-        min-height: 120px;
+        white-space: pre-wrap !important;
+        word-break: break-all !important;
+        border: none !important;
+        padding: 0 !important;
+        background: transparent !important;
+        line-height: 1.6 !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        color: var(--slate-800) !important;
+        min-height: auto !important;
         overflow: visible !important;
       }
       @page {
         size: A4 portrait;
-        margin: 10mm;
+        margin: 10mm; /* A4標準印刷マージン */
       }
     }
   </style>
@@ -589,8 +658,22 @@
       deleteId: null,
       inputDate: today(),
       inputName: '',
-      inputs: { gripRight: '', gripLeft: '', oneLegRight: '', oneLegLeft: '', chairStand: '', walk5mNormal: '', walk5mFast: '', tug: '' }
+      inputs: { gripRight: '', gripLeft: '', oneLegRight: '', oneLegLeft: '', chairStand: '', walk5mNormal: '', walk5mFast: '', tug: '' },
+      toast: { message: '', visible: false, type: 'info' }
     };
+
+    let toastTimeout = null;
+    function showToast(message, type = 'info') {
+      if (toastTimeout) {
+        clearTimeout(toastTimeout);
+      }
+      state.toast = { message, visible: true, type };
+      render();
+      toastTimeout = setTimeout(() => {
+        state.toast.visible = false;
+        render();
+      }, 4000);
+    }
 
     function sanitize(records) {
       return Array.isArray(records) ? records.map(r => ({
@@ -618,7 +701,7 @@
           state.welcome = true;
         }
       } catch (e) {
-        alert('保存データの読み込みに失敗しました。初期状態で起動します。');
+        showToast('保存データの読み込みに失敗しました。初期状態で起動します。', 'error');
         state.records = [];
         state.welcome = true;
       }
@@ -718,7 +801,9 @@
     }
 
     function radar(cur, prev, isPrint = false) {
-      const size = isPrint ? 500 : 320, center = size / 2, radius = isPrint ? 120 : 110, step = Math.PI * 2 / keys.length;
+      // 印刷可能領域にジャストフィットさせるため、印刷用チャートは横幅を370pxにダウンサイズし、
+      // はみ出しや要素配置のズレを完全に防ぎます。
+      const size = isPrint ? 370 : 320, center = size / 2, radius = isPrint ? 100 : 110, step = Math.PI * 2 / keys.length;
       const coord = (val, i) => {
         const a = i * step - Math.PI / 2, r = val / 100 * radius;
         return [center + r * Math.cos(a), center + r * Math.sin(a)]
@@ -731,27 +816,31 @@
         const [x, y] = coord(100, i);
         return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#cbd5e1"/>`
       }).join('');
+      
+      // レーダーチャートラベルテキスト。印刷時にベクター描画の誤差でフォント位置がズレないよう、
+      // 印刷用CSSプロパティ(text-rendering: geometricPrecision)を付与したスタイルで安定化させます。
       const labels = keys.map((k, i) => {
-        const a = i * step - Math.PI / 2, lr = radius + (isPrint ? 60 : 35);
-        return `<text x="${center + lr * Math.cos(a)}" y="${center + lr * Math.sin(a)}" text-anchor="middle" dominant-baseline="middle" font-size="${isPrint ? 14 : 10}" font-weight="${isPrint ? '700' : '600'}" fill="${isPrint ? '#000' : '#64748b'}">${isPrint ? METRICS[k].printLabel : METRICS[k].label}</text>`
+        const a = i * step - Math.PI / 2, lr = radius + (isPrint ? 40 : 35);
+        return `<text x="${center + lr * Math.cos(a)}" y="${center + lr * Math.sin(a)}" text-anchor="middle" dominant-baseline="central" font-size="${isPrint ? 12 : 10}" font-weight="${isPrint ? '700' : '600'}" fill="${isPrint ? '#000' : '#64748b'}" style="${isPrint ? 'text-rendering: geometricPrecision;' : ''}">${isPrint ? METRICS[k].printLabel : METRICS[k].label}</text>`
       }).join('');
+      
       const path = (rec) => rec ? keys.map((k, i) => coord(normalize(k, rec[k]), i).join(',')).join(' ') : '';
       const prevPoly = prev ? `<polygon points="${path(prev)}" fill="rgba(148,163,184,.2)" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 2"/>` : '';
       const curPoly = cur ? `<polygon points="${path(cur)}" fill="rgba(37,99,235,.3)" stroke="#2563eb" stroke-width="${isPrint ? 4 : 2}"/>` : '';
       const dots = isPrint && cur ? keys.map((k, i) => {
         const [x, y] = coord(normalize(k, cur[k]), i);
-        return `<circle cx="${x}" cy="${y}" r="6" fill="#2563eb" stroke="white" stroke-width="2"/>`
+        return `<circle cx="${x}" cy="${y}" r="5" fill="#2563eb" stroke="white" stroke-width="2"/>`
       }).join('') : '';
       
       return `
         <div class="card chart-card">
           <h3>📈 身体機能バランス</h3>
-          <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="max-width:100%;overflow:visible">${grid}${lines}${labels}${prevPoly}${curPoly}${dots}</svg>
+          <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="max-width:100%;overflow:visible;display:block;margin:0 auto">${grid}${lines}${labels}${prevPoly}${curPoly}${dots}</svg>
           <div class="legend">
             <span><i class="box" style="background:rgba(37,99,235,.3);border:2px solid #2563eb"></i>今回の結果</span>
             ${prev ? `<span><i class="box" style="background:rgba(148,163,184,.2);border:2px dashed #94a3b8"></i>前回(${fmtDate(prev.date)})</span>` : ''}
           </div>
-          <div class="note">円の外側に近いほど、体が元気に動かせていることを示します。秒数項目は、時間が短いほど外側に広がります。</div>
+          <div class="note no-print">円の外側に近いほど、体が元気に動かせていることを示します。秒数項目は、時間が短いほど外側に広がります。</div>
         </div>
       `;
     }
@@ -808,7 +897,7 @@
       for (const k of keys) {
         const v = Number($('in_' + k).value), max = METRICS[k].inputMax;
         if (Number.isNaN(v) || v < 0 || v > max) {
-          alert(`${METRICS[k].label}は0〜${max}の範囲で入力してください。`);
+          showToast(`${METRICS[k].label}は0〜${max}の範囲で入力してください。`, 'error');
           return
         }
         vals[k] = v
@@ -821,6 +910,7 @@
       state.inputs = { gripRight: '', gripLeft: '', oneLegRight: '', oneLegLeft: '', chairStand: '', walk5mNormal: '', walk5mFast: '', tug: '' };
       save();
       selectRecordNoRender(rec.id);
+      showToast(`${name}様の測定データを保存しました。`, 'success');
       render()
     }
 
@@ -845,7 +935,7 @@
               <span class="diff ${cls}">${diff > 0 ? '+' : ''}${diff.toFixed(1)}${pos ? ' 向上' : ''}</span>
               <small style="margin-left:auto;color:#94a3b8">前: ${p}</small>
             </div>
-            <div class="range"><span>マッピング基準: ${m.rangeLabel}</span><span>${m.directionLabel}</span></div>
+            <div class="range no-print"><span>マッピング基準: ${m.rangeLabel}</span><span>${m.directionLabel}</span></div>
           </div>
         `;
       }).join('')
@@ -864,13 +954,16 @@
     function doPrint() {
       const cur = current();
       if (!cur) {
-        alert('印刷する記録が選択されていません。対象者と測定日を選択してください。');
+        showToast('印刷する記録が選択されていません。対象者と測定日を選択してください。', 'error');
         return;
+      }
+
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
       }
 
       const wasPreview = state.preview;
       
-      // 1. 印刷前にプレビューモード(印刷対象のDOM)を強制的に有効化し、再レンダリングします
       state.preview = true;
       render();
 
@@ -883,18 +976,17 @@
       };
       window.addEventListener('afterprint', restoreAfterPrint);
 
-      // 2. ブラウザがDOMの再描画、スタイルの適用、SVGレーダーチャートのレンダリングを
-      // 完了させるための十分な猶予（イベントループの一時停止）を設けるため、
-      // setTimeoutにて処理を遅延させてから印刷ダイアログを起動します。
+      // システム印刷ダイアログの起動タイミングを調整。
+      // レンダリングエンジンの再計算、およびSVG内のフォントベクター配置確定後に完全に合致させます。
       setTimeout(() => {
         try {
           window.focus();
           window.print();
         } catch (e) {
-          alert('印刷プレビューを開けませんでした。キーボードの Ctrl+P（Macは command+P）で印刷画面を開いてください。');
+          showToast('印刷プレビューを開けませんでした。ブラウザの設定か、キーボードショートカット（Ctrl+P / Cmd+P）をお試しください。', 'error');
           restoreAfterPrint();
         }
-      }, 150);
+      }, 300);
     }
 
     function askDelete(id) {
@@ -912,6 +1004,7 @@
       state.deleteId = null;
       ensureCurrent();
       save();
+      showToast('測定データを削除しました。', 'success');
       render()
     }
     
@@ -931,7 +1024,6 @@
       cur.aiComment = v;
       save();
       
-      // 同期的に印刷用の隠しdivの内容も更新する（再描画コスト低減のためDOMを直接更新）
       const printDiv = document.querySelector('.print-advice');
       if (printDiv) {
         printDiv.textContent = v;
@@ -980,13 +1072,13 @@
                     `;
                   }).join('')}
                 </div>
-                <div style="font-size:12px;color:#64748b;background:#f8fafc;border:1px solid #f1f5f9;border-radius:10px;padding:9px;margin-top:10px">
+                <div style="font-size:11px;color:#64748b;background:#f8fafc;border:1px solid #f1f5f9;border-radius:10px;padding:9px;margin-top:10px;line-height:1.4">
                   <b>※TUG：</b>椅子から立ち上がり、3m先の目印を回って再び座るまでの時間を測定します。歩行能力や転倒リスクの目安となります。
                 </div>
               </div>
             </div>
             <div class="advice">
-              <h3>💬 リハビリスタッフからのアドバイス</h3>
+              <h3 style="margin:0 0 8px 0;font-size:15px;color:var(--slate-800)">💬 リハビリスタッフからのアドバイス</h3>
               <textarea class="no-print" oninput="updateAdvice(this.value)">${html(advice)}</textarea>
               <div class="print-advice">${html(advice)}</div>
             </div>
@@ -1053,11 +1145,28 @@
       return s
     }
 
+    function toastComponent() {
+      if (!state.toast.visible) return '';
+      const isError = state.toast.type === 'error';
+      const isSuccess = state.toast.type === 'success';
+      const toastClass = isError ? 'toast-error' : (isSuccess ? 'toast-success' : '');
+      const icon = isError ? '⚠️' : (isSuccess ? '✅' : 'ℹ️');
+      return `
+        <div class="toast-container">
+          <div class="toast ${toastClass}">
+            <span>${icon}</span>
+            <div>${html(state.toast.message)}</div>
+          </div>
+        </div>
+      `;
+    }
+
     function render() {
       ensureCurrent();
       const cur = current(), prev = compare(), urs = userRecords();
       const app = $('app');
       app.innerHTML = `
+        ${toastComponent()}
         ${modals()}
         ${report()}
         <div class="container ${state.preview ? 'hidden' : ''}">
