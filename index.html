@@ -470,13 +470,58 @@
       border-top: 4px solid var(--blue);
       padding-top: 8px;
     }
+    
+    /* 測定項目の詳細表示用レイアウト構造の定義 */
     .report-row {
       display: flex;
       justify-content: space-between;
-      align-items: flex-end;
+      align-items: flex-start;
       border-bottom: 1px solid var(--slate-200);
       padding: 6px 0;
     }
+    .row-label {
+      flex: 1;
+      padding-top: 6px;
+    }
+    .row-value-container {
+      text-align: right;
+      flex-shrink: 0;
+      min-width: 140px; /* 数値と単位が絶対に重ならない領域を確保 */
+    }
+    .value-main {
+      display: inline-flex;
+      align-items: baseline; /* 大きな数値と小さな単位のテキスト底辺を完全に整列させる */
+      justify-content: flex-end;
+      gap: 2px;
+      white-space: nowrap; /* 単位が折り返されて見切れるのを完全に防ぐ */
+    }
+    .value-main .num {
+      font-size: 26px;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .value-main .unit {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--slate-600);
+    }
+    .value-prev, .value-first {
+      font-size: 12px;
+      color: var(--slate-500);
+      margin-top: 2px;
+    }
+    .value-diff {
+      font-size: 13px;
+      font-weight: 800;
+      margin-top: 1px;
+    }
+    .diff-good {
+      color: var(--blue);
+    }
+    .diff-bad {
+      color: var(--red);
+    }
+
     .advice {
       border: 2px solid #bfdbfe;
       background: #eff6ff;
@@ -622,13 +667,42 @@
       .report-list {
         padding-top: 4px !important;
       }
+      
+      /* 印刷時における表部分のサイズ微細調整（見切れ・崩れの完全阻止） */
       .report-row {
-        padding: 3.5px 0 !important; /* 行パディングを小さくして全体の高さを圧縮 */
+        padding: 3px 0 !important; /* 行幅を圧縮して1枚に完璧に収める */
         font-size: 13px !important;
       }
-      .report-row span {
-        font-size: 22px !important; /* 数値表示を少し引き締め、1行にジャストフィット */
+      .row-label {
+        padding-top: 4px !important;
       }
+      .row-value-container {
+        min-width: 130px !important; /* 印刷時も縮小させない。単位の右端見切れを100%防止する */
+      }
+      .value-main .num {
+        font-size: 20px !important; /* 1枚収めのために少しフォント調整 */
+        line-height: 1 !important;
+      }
+      .value-main .unit {
+        font-size: 11px !important;
+        font-weight: 800 !important;
+        color: var(--slate-800) !important;
+      }
+      .value-prev, .value-first {
+        font-size: 11px !important;
+        margin-top: 1px !important;
+      }
+      .value-diff {
+        font-size: 11px !important;
+        margin-top: 1px !important;
+      }
+      .diff-good {
+        color: var(--blue) !important;
+      }
+      .diff-bad {
+        color: var(--red) !important;
+      }
+
       .no-print {
         display: none !important;
       }
@@ -840,8 +914,6 @@
     }
 
     function radar(cur, prev, isPrint = false) {
-      // 1ページに美しく収めるため、印刷用チャートサイズを横幅「310px」、内円半径「85px」に再スリム化。
-      // これにより、右側の測定項目詳細（8行分）の縦寸法と完全に一致し、印刷面でのズレを完全に防ぎます。
       const size = isPrint ? 310 : 320, center = size / 2, radius = isPrint ? 85 : 110, step = Math.PI * 2 / keys.length;
       const coord = (val, i) => {
         const a = i * step - Math.PI / 2, r = val / 100 * radius;
@@ -1095,13 +1167,16 @@
                     const m = METRICS[k], c = cur[k] || 0, p = prev ? prev[k] : null, d = p !== null ? c - p : 0, pos = m.higherIsBetter ? d > 0 : d < 0;
                     return `
                       <div class="report-row">
-                        <div><b>${m.printLabel}</b></div>
-                        <div style="text-align:right">
-                          <span style="font-size:26px;font-weight:900">${c}</span> <b>${unit(k)}</b>
+                        <div class="row-label"><b>${m.printLabel}</b></div>
+                        <div class="row-value-container">
+                          <div class="value-main">
+                            <span class="num">${c}</span>
+                            <span class="unit">${unit(k)}</span>
+                          </div>
                           ${p !== null ? `
-                            <div style="font-size:12px;color:#64748b">前回: ${p}</div>
-                            ${d !== 0 ? `<div style="font-size:13px;font-weight:800;color:${pos ? '#2563eb' : '#ef4444'}">${d > 0 ? '+' : ''}${d.toFixed(1)} ${pos ? '(向上)' : ''}</div>` : ''}
-                          ` : '<div style="font-size:12px;color:#94a3b8">初回記録</div>'}
+                            <div class="value-prev">前回: ${p} ${unit(k)}</div>
+                            ${d !== 0 ? `<div class="value-diff ${pos ? 'diff-good' : 'diff-bad'}">${d > 0 ? '+' : ''}${d.toFixed(1)} ${pos ? '(向上)' : ''}</div>` : ''}
+                          ` : '<div class="value-first">初回記録</div>'}
                         </div>
                       </div>
                     `;
