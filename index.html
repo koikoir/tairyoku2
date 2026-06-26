@@ -471,7 +471,7 @@
       padding-top: 8px;
     }
     
-    /* 測定項目の詳細表示用レイアウト構造の定義 */
+    /* 💬 測定項目の詳細表示用レイアウト構造の定義 */
     .report-row {
       display: flex;
       justify-content: space-between;
@@ -487,6 +487,7 @@
       text-align: right;
       flex-shrink: 0;
       min-width: 140px; /* 数値と単位が絶対に重ならない領域を確保 */
+      padding-right: 12px; /* ⚠️重要：画面・印刷の両方で文字切れを防ぐための右セーフ余白 */
     }
     .value-main {
       display: inline-flex;
@@ -581,7 +582,7 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* レスポンシブ設計：画面表示時のみに限定化する(印刷時のカラム崩れを完全に防ぐ) */
+    /* レレスポンシブ設計：画面表示時のみに限定化する(印刷時のカラム崩れを完全に防ぐ) */
     @media screen and (max-width: 900px) {
       .grid, .main-grid, .report-flex {
         grid-template-columns: 1fr;
@@ -618,7 +619,7 @@
         background: #fff !important;
       }
       .report {
-        padding: 0 !important;
+        padding: 6mm 10mm !important; /* ⚠️超重要：余白を適正に確保。右端の見切れを根本から防ぐ */
         max-width: 190mm !important; /* A4余白10mm時の実効最大幅 */
         width: 100% !important;
         box-shadow: none !important;
@@ -672,12 +673,14 @@
       .report-row {
         padding: 3px 0 !important; /* 行幅を圧縮して1枚に完璧に収める */
         font-size: 13px !important;
+        padding-right: 12px !important; /* ⚠️右側に逃げしろを設けて見切れを100%防止 */
       }
       .row-label {
         padding-top: 4px !important;
       }
       .row-value-container {
         min-width: 130px !important; /* 印刷時も縮小させない。単位の右端見切れを100%防止する */
+        padding-right: 14px !important; /* さらに内側にパディングを入れて、用紙の境界から距離をとる */
       }
       .value-main .num {
         font-size: 20px !important; /* 1枚収めのために少しフォント調整 */
